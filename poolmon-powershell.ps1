@@ -16,21 +16,21 @@ Add-Type -TypeDefinition @'
 using System;
 using System.Runtime.InteropServices;
 namespace Win32 {
-    public enum NT_STATUS
-    {
+	public enum NT_STATUS
+	{
 		STATUS_SUCCESS = 0x00000000,
 		STATUS_BUFFER_OVERFLOW = unchecked((int)0x80000005),
 		STATUS_INFO_LENGTH_MISMATCH = unchecked((int)0xC0000004)
-    }
+	}
 
 	public enum SYSTEM_INFORMATION_CLASS
-    {
+	{
 		SystemPoolTagInformation = 22,
-    }
+	}
 
 	[StructLayout(LayoutKind.Sequential)]
-    public struct SYSTEM_POOLTAG
-    {
+	public struct SYSTEM_POOLTAG
+	{
 		[MarshalAs(UnmanagedType.ByValArray, SizeConst = 4)] public byte[] Tag;
 		public uint PagedAllocs;
 		public uint PagedFrees;
@@ -38,62 +38,62 @@ namespace Win32 {
 		public uint NonPagedAllocs;
 		public uint NonPagedFrees;
 		public System.IntPtr NonPagedUsed;
-    }
+	}
 
 	public class PInvoke {
-        [DllImport("ntdll.dll")]
-        public static extern NT_STATUS NtQuerySystemInformation(
-        [In] SYSTEM_INFORMATION_CLASS SystemInformationClass,
-        [In] System.IntPtr SystemInformation,
-        [In] int SystemInformationLength,
-        [Out] out int ReturnLength);
-    }
+		[DllImport("ntdll.dll")]
+		public static extern NT_STATUS NtQuerySystemInformation(
+		[In] SYSTEM_INFORMATION_CLASS SystemInformationClass,
+		[In] System.IntPtr SystemInformation,
+		[In] int SystemInformationLength,
+		[Out] out int ReturnLength);
+	}
 }
 '@
 
 function HRSize()
 {
-    Param(
+	Param(
 		[int64]$sizeInBytes,
 		[int]$decimalPlaces = 2
 	)
-    switch ($sizeInBytes)
-    {
-        {$sizeInBytes -ge 1TB} {"{0:n$decimalPlaces}" -f ($sizeInBytes/1TB) + " TB" ; break}
-        {$sizeInBytes -ge 1GB} {"{0:n$decimalPlaces}" -f ($sizeInBytes/1GB) + " GB" ; break}
-        {$sizeInBytes -ge 1MB} {"{0:n$decimalPlaces}" -f ($sizeInBytes/1MB) + " MB" ; break}
-        {$sizeInBytes -ge 1KB} {"{0:n$decimalPlaces}" -f ($sizeInBytes/1KB) + " KB" ; break}
-        Default { "{0:n$decimalPlaces}" -f $sizeInBytes + " Bytes" }
-    }
+	switch ($sizeInBytes)
+	{
+		{$sizeInBytes -ge 1TB} {"{0:n$decimalPlaces}" -f ($sizeInBytes/1TB) + " TB" ; break}
+		{$sizeInBytes -ge 1GB} {"{0:n$decimalPlaces}" -f ($sizeInBytes/1GB) + " GB" ; break}
+		{$sizeInBytes -ge 1MB} {"{0:n$decimalPlaces}" -f ($sizeInBytes/1MB) + " MB" ; break}
+		{$sizeInBytes -ge 1KB} {"{0:n$decimalPlaces}" -f ($sizeInBytes/1KB) + " KB" ; break}
+		Default { "{0:n$decimalPlaces}" -f $sizeInBytes + " Bytes" }
+	}
 }
 
 $pooTagInfo = $null
 $length = 4096
 do
 {
-    $ptr = [IntPtr]::Zero
-    try
-    {
-        try {}
-        finally
+	$ptr = [IntPtr]::Zero
+	try
+	{
+		try {}
+		finally
 		{
-            $ptr = [System.Runtime.InteropServices.Marshal]::AllocHGlobal($length)
-        }
-        $returnLength
-        $pooTagInfo = [Win32.PInvoke]::NtQuerySystemInformation([Win32.SYSTEM_INFORMATION_CLASS]::SystemPoolTagInformation, $ptr, $length, [System.Management.Automation.PSReference]$returnLength)
-        if ($pooTagInfo -eq [Win32.NT_STATUS]::STATUS_INFO_LENGTH_MISMATCH)
-        {
-            $length += 4096
-        }
-        elseif ($pooTagInfo -eq [Win32.NT_STATUS]::STATUS_SUCCESS)
-        {
+			$ptr = [System.Runtime.InteropServices.Marshal]::AllocHGlobal($length)
+		}
+		$returnLength
+		$pooTagInfo = [Win32.PInvoke]::NtQuerySystemInformation([Win32.SYSTEM_INFORMATION_CLASS]::SystemPoolTagInformation, $ptr, $length, [System.Management.Automation.PSReference]$returnLength)
+		if ($pooTagInfo -eq [Win32.NT_STATUS]::STATUS_INFO_LENGTH_MISMATCH)
+		{
+			$length += 4096
+		}
+		elseif ($pooTagInfo -eq [Win32.NT_STATUS]::STATUS_SUCCESS)
+		{
 			$poolCount = [System.Runtime.InteropServices.Marshal]::ReadInt32($ptr)
-            $offset = 4
-            $size = [System.Runtime.InteropServices.Marshal]::SizeOf([System.Type]([Win32.SYSTEM_POOLTAG]))
+			$offset = 4
+			$size = [System.Runtime.InteropServices.Marshal]::SizeOf([System.Type]([Win32.SYSTEM_POOLTAG]))
 			$poolHash = $null
 			$poolHash = @{}
-            for ($i = 0; $i -lt $poolCount; $i++)
-            {
+			for ($i = 0; $i -lt $poolCount; $i++)
+			{
 				$poolEntry = [Win32.SYSTEM_POOLTAG][System.Runtime.InteropServices.Marshal]::PtrToStructure([System.IntPtr]($ptr + $offset), [System.Type][Win32.SYSTEM_POOLTAG])
 				$poolTag = [System.Text.Encoding]::Default.GetString($poolEntry.Tag)
 				$poolPagedAllocs = [int]$poolEntry.PagedAllocs
@@ -126,7 +126,7 @@ do
 				}
 				$poolHash.$poolTag = $poolEntryHash
 				$offset += $size
-            }
+			}
 			$expression = '$(foreach ($poolEntry in $poolHash.Values) {new-object PSObject -Property $poolEntry})'
 			$expression += '|Select-Object "Tag","PagedAllocs","PagedFrees","PagedDiff","PagedUsed","PagedUsedHR","NonPagedAllocs","NonPagedFrees","NonPagedDiff","NonPagedUsed","NonPagedUsedHR","TotalUsed","TotalUsedHR"'
 			if ($sortdir -eq 'Ascending')
@@ -154,11 +154,11 @@ do
 				$expression += '|Format-Table *'
 			}
 			Invoke-Expression $expression
-        }		
-    }
-    finally
-    {
-        [System.Runtime.InteropServices.Marshal]::FreeHGlobal($ptr)
-    }
+		}
+	}
+	finally
+	{
+		[System.Runtime.InteropServices.Marshal]::FreeHGlobal($ptr)
+	}
 }
 while ($pooTagInfo -eq [Win32.NT_STATUS]::STATUS_INFO_LENGTH_MISMATCH)
