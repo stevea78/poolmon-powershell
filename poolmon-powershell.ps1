@@ -2,12 +2,13 @@ param (
 	[string]$sortby = 'TotalUsed',
 	[string]$sortdir = 'Descending',
 	[int]$top = 0,
-	[string]$csv = 'false'
+	[string]$csv = 'false',
+	[string]$gridview = 'false'
 )
 
 if ($env:Processor_Architecture -ne "x86")
 {
-&"$env:windir\syswow64\windowspowershell\v1.0\powershell.exe" -executionpolicy bypass -noninteractive -noprofile -file $myinvocation.Mycommand.Path -sortby $sortby -sortdir $sortdir -top $top -csv $csv
+&"$env:windir\syswow64\windowspowershell\v1.0\powershell.exe" -executionpolicy bypass -noninteractive -noprofile -file $myinvocation.Mycommand.Path -sortby $sortby -sortdir $sortdir -top $top -csv $csv -gridview $gridview
 exit
 }
 
@@ -143,6 +144,10 @@ do
 			if ($csv -eq 'true')
 			{
 				$expression += '|ConvertTo-Csv -NoTypeInformation'
+			}
+			elseif ($gridview -eq 'true')
+			{
+				$expression += '|Out-GridView -Title "Kernel Memory Pool (captured $(Get-Date -Format "dd/MM/yyyy HH:mm:ss"))" -Wait'
 			}
 			else
 			{
