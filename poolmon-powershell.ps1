@@ -1,10 +1,19 @@
+<# .SYNOPSIS #>
 param (
+	# comma seperated list of tags to display e.g. -tags mmst,fmfn
+	[string[]]$tags,
+	# value to sort by e.g. -sortby pagedusedbytes
 	[string]$sortby = 'TotalUsed',
+	# direction to sort by e.g. -sortdir ascending|descending
 	[string]$sortdir = 'Descending',
+	# top X records to display e.g. -top 10
 	[int]$top = 0,
-	[string]$view = 'table'
+	# output view e.g. -view table|csv|grid
+	[string]$view = 'table',
+	# file containing tag information e.g. -tagfile pooltag.txt
+	[string]$tagfile = 'pooltag.txt'
 )
-
+ 
 Add-Type -TypeDefinition @'
 using System;
 using System.Runtime.InteropServices;
@@ -41,93 +50,97 @@ namespace Win32 {
 }
 '@
 
-function HRSize()
-{
-	Param(
-		[int64]$sizeInBytes,
-		[int]$decimalPlaces = 2
-	)
-	switch ($sizeInBytes)
-	{
-		{$sizeInBytes -ge 1TB} {"{0:n$decimalPlaces}" -f ($sizeInBytes/1TB) + " TB" ; break}
-		{$sizeInBytes -ge 1GB} {"{0:n$decimalPlaces}" -f ($sizeInBytes/1GB) + " GB" ; break}
-		{$sizeInBytes -ge 1MB} {"{0:n$decimalPlaces}" -f ($sizeInBytes/1MB) + " MB" ; break}
-		{$sizeInBytes -ge 1KB} {"{0:n$decimalPlaces}" -f ($sizeInBytes/1KB) + " KB" ; break}
-		Default { "{0:n$decimalPlaces}" -f $sizeInBytes + " Bytes" }
+Function Get-Pool() {
+	if ($tagfile) {
+		if (Test-Path $tagfile) {
+			$tagFileHash = $null
+			$tagFileHash = new-object System.Collections.Hashtable
+			foreach($line in Get-Content $tagfile) {
+				if(($line.trim() -ne '') -and ($line.trim() -like '*-*-*') -and ($line.trim().SubString(0,2) -ne '//') -and ($line.trim().SubString(0,3) -ne 'rem')){
+					$t,$b,$d = $line.split('-')
+					$t = $t.trim()
+					$b = $b.trim()
+					$d = $d.trim()
+					if (!($tagFileHash.containsKey($t))) {
+						$tagFileHash.Add($t,"$b|$d")
+					}
+				}
+			}
+		}
 	}
+	$ptrSize = 0
+	while ($true) {
+		[IntPtr]$ptr = [System.Runtime.InteropServices.Marshal]::AllocHGlobal($ptrSize)
+		$ptrLength = New-Object Int
+		$tagInfo = [Win32.PInvoke]::NtQuerySystemInformation([Win32.SYSTEM_INFORMATION_CLASS]::SystemPoolTagInformation, $ptr, $ptrSize, [ref]$ptrLength)
+		if ($tagInfo -eq [Win32.NT_STATUS]::STATUS_INFO_LENGTH_MISMATCH) {
+			[System.Runtime.InteropServices.Marshal]::FreeHGlobal($ptr)
+			$ptrSize = [System.Math]::Max($ptrSize,$ptrLength)
+		}
+		elseif ($tagInfo -eq [Win32.NT_STATUS]::STATUS_SUCCESS) {
+			break
+		}
+		else {
+			[System.Runtime.InteropServices.Marshal]::FreeHGlobal($ptr)
+			"An error occurred getting SystemPoolTagInformation"
+			return
+		}
+	}
+	$systemPoolTag = New-Object Win32.SYSTEM_POOLTAG
+	$systemPoolTag = $systemPoolTag.GetType()
+	$size = [System.Runtime.InteropServices.Marshal]::SizeOf([type]([Win32.SYSTEM_POOLTAG]))
+	$offset = $ptr.ToInt64()
+	$count = [System.Runtime.InteropServices.Marshal]::ReadInt32($offset)
+	$offset = $offset + [System.IntPtr]::Size
+	for ($i=0; $i -lt $count; $i++){
+		$entryPtr = New-Object System.Intptr -ArgumentList $offset
+		$entry = [system.runtime.interopservices.marshal]::PtrToStructure($entryPtr,[type]$systemPoolTag)
+		$Tag = [System.Text.Encoding]::Default.GetString($entry.Tag)
+		if (!$tags -or ($tags -and $tags -contains $Tag)) {
+			if ($tagFileHash -and $tagFileHash.containsKey($tag)) {
+				$Bin,$BinDesc = $tagFileHash.$tag.split('|')
+					[PSCustomObject]@{
+					Tag = $Tag
+					PagedAllocs = $entry.PagedAllocs
+					PagedFrees = $entry.PagedFrees
+					PagedDiff = $entry.PagedAllocs - $entry.PagedFrees
+					PagedUsedBytes = [int]$entry.PagedUsed
+					NonPagedAllocs = $entry.NonPagedAllocs
+					NonPagedFrees = $entry.NonPagedFrees
+					NonPagedDiff = $entry.NonPagedAllocs - $entry.NonPagedFrees
+					NonPagedUsedBytes = [int]$entry.NonPagedUsed
+					TotalUsedBytes = $entry.PagedUsed + $entry.NonPagedUsed
+					Binary = $Bin
+					Description = $BinDesc
+				}
+			} else {
+				[PSCustomObject]@{
+					Tag = $Tag
+					PagedAllocs = $entry.PagedAllocs
+					PagedFrees = $entry.PagedFrees
+					PagedDiff = $entry.PagedAllocs - $entry.PagedFrees
+					PagedUsedBytes = [int]$entry.PagedUsed
+					NonPagedAllocs = $entry.NonPagedAllocs
+					NonPagedFrees = $entry.NonPagedFrees
+					NonPagedDiff = $entry.NonPagedAllocs - $entry.NonPagedFrees
+					NonPagedUsedBytes = [int]$entry.NonPagedUsed
+					TotalUsedBytes = $entry.PagedUsed + $entry.NonPagedUsed
+				}
+			}
+		}
+		$offset = $offset + $size
+	}
+	[System.Runtime.InteropServices.Marshal]::FreeHGlobal($ptr)
 }
 
-$ptrSize = 0
-while ($true) {
-	[IntPtr]$ptr = [System.Runtime.InteropServices.Marshal]::AllocHGlobal($ptrSize)
-	$ptrLength = New-Object Int
-	$tagInfo = [Win32.PInvoke]::NtQuerySystemInformation([Win32.SYSTEM_INFORMATION_CLASS]::SystemPoolTagInformation, $ptr, $ptrSize, [ref]$ptrLength)
-	if ($tagInfo -eq [Win32.NT_STATUS]::STATUS_INFO_LENGTH_MISMATCH) {
-		[System.Runtime.InteropServices.Marshal]::FreeHGlobal($ptr)
-		$ptrSize = [System.Math]::Max($ptrSize,$ptrLength)
-	}
-	elseif ($tagInfo -eq [Win32.NT_STATUS]::STATUS_SUCCESS) {
-		break
-	}
-	else {
-		[System.Runtime.InteropServices.Marshal]::FreeHGlobal($ptr)
-		"An error occurred getting SystemPoolTagInformation"
-		return
+$expression = 'Get-Pool'
+if ($sortby) {
+	$expression += '|Sort-Object -Property $sortby'
+	if ($sortdir -eq 'Descending') {
+		$expression += ' -Descending'
 	}
 }
-$poolTag = New-Object Win32.SYSTEM_POOLTAG
-$poolTag = $poolTag.GetType()
-$size = [System.Runtime.InteropServices.Marshal]::SizeOf([type]([Win32.SYSTEM_POOLTAG]))
-$offset = $ptr.ToInt64()
-$count = [System.Runtime.InteropServices.Marshal]::ReadInt32($offset)
-$offset = $offset + [System.IntPtr]::Size
-$poolHash = $null
-$poolHash = @{}
-for ($i=0; $i -lt $count; $i++){
-	$entryPtr = New-Object System.Intptr -ArgumentList $offset
-	$entry = [system.runtime.interopservices.marshal]::PtrToStructure($entryPtr,[type]$poolTag)
-	$tag = [System.Text.Encoding]::Default.GetString($entry.Tag)
-	$pagedAllocs = [int]$entry.PagedAllocs
-	$pagedFrees = [int]$entry.PagedFrees
-	$pagedDiff = [int]($pagedAllocs - $pagedFrees)
-	$pagedUsed = [int]$entry.PagedUsed
-	$pagedUsedHR = HRSize([int]$entry.PagedUsed)
-	$nonPagedAllocs = [int]$entry.NonPagedAllocs
-	$nonPagedFrees = [int]$entry.NonPagedFrees
-	$nonPagedDiff = [int]($nonPagedAllocs - $nonPagedFrees)
-	$nonPagedUsed = [int]$entry.NonPagedUsed
-	$nonPagedUsedHR = HRSize([int]($entry.NonPagedUsed))
-	$pooltotalUsed = [int]($pagedUsed + $nonPagedUsed)
-	$pooltotalUsedHR = HRSize([int]$pooltotalUsed)
-	$entryHash = $null
-	$entryHash = @{
-		"Tag" = $tag
-		"PagedAllocs" = $pagedAllocs
-		"PagedFrees" = $pagedFrees
-		"PagedDiff" = $pagedDiff
-		"PagedUsed" = $pagedUsed
-		"PagedUsedHR" = $pagedUsedHR
-		"NonPagedAllocs" = $nonPagedAllocs
-		"NonPagedFrees" = $nonPagedFrees
-		"NonPagedDiff" = $nonPagedDiff
-		"NonPagedUsed" = $nonPagedUsed
-		"NonPagedUsedHR" = $nonPagedUsedHR
-		"TotalUsed" = $pooltotalUsed
-		"TotalUsedHR" = $pooltotalUsedHR
-	}
-	$poolHash.$tag = $entryHash
-	$offset = $offset + $size
-}
-[System.Runtime.InteropServices.Marshal]::FreeHGlobal($ptr)
-$expression = '$(ForEach ($value in $poolHash.Values) {New-Object PSObject -Property $value})'
-$expression += '|Select-Object "Tag","PagedAllocs","PagedFrees","PagedDiff","PagedUsed","PagedUsedHR","NonPagedAllocs","NonPagedFrees","NonPagedDiff","NonPagedUsed","NonPagedUsedHR","TotalUsed","TotalUsedHR"'
-$expression += '|Sort-Object -Property $sortby'
-if ($sortdir -eq 'Descending')
-{
-	$expression += ' -Descending'
-}
-if ($top -gt 0)
-{
+if ($top -gt 0) {
 	$expression += '|Select-Object -First $top'
 }
 if ($view -eq 'csv') {
