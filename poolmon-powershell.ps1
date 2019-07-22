@@ -101,30 +101,30 @@ Function Get-Pool() {
 				$Bin,$BinDesc = $tagFileHash.$tag.split('|')
 					[PSCustomObject]@{
 					Tag = $Tag
-					PagedAllocs = $entry.PagedAllocs
-					PagedFrees = $entry.PagedFrees
-					PagedDiff = $entry.PagedAllocs - $entry.PagedFrees
-					PagedUsedBytes = [int]$entry.PagedUsed
-					NonPagedAllocs = $entry.NonPagedAllocs
-					NonPagedFrees = $entry.NonPagedFrees
-					NonPagedDiff = $entry.NonPagedAllocs - $entry.NonPagedFrees
-					NonPagedUsedBytes = [int]$entry.NonPagedUsed
-					TotalUsedBytes = $entry.PagedUsed + $entry.NonPagedUsed
+					PagedAllocs = [int64]$entry.PagedAllocs
+					PagedFrees = [int64]$entry.PagedFrees
+					PagedDiff = [int64]$entry.PagedAllocs - [int64]$entry.PagedFrees
+					PagedUsedBytes = [int64]$entry.PagedUsed
+					NonPagedAllocs = [int64]$entry.NonPagedAllocs
+					NonPagedFrees = [int64]$entry.NonPagedFrees
+					NonPagedDiff = [int64]$entry.NonPagedAllocs - [int64]$entry.NonPagedFrees
+					NonPagedUsedBytes = [int64]$entry.NonPagedUsed
+					TotalUsedBytes = [int64]$entry.PagedUsed + [int64]$entry.NonPagedUsed
 					Binary = $Bin
 					Description = $BinDesc
 				}
 			} else {
 				[PSCustomObject]@{
 					Tag = $Tag
-					PagedAllocs = $entry.PagedAllocs
-					PagedFrees = $entry.PagedFrees
-					PagedDiff = $entry.PagedAllocs - $entry.PagedFrees
-					PagedUsedBytes = [int]$entry.PagedUsed
-					NonPagedAllocs = $entry.NonPagedAllocs
-					NonPagedFrees = $entry.NonPagedFrees
-					NonPagedDiff = $entry.NonPagedAllocs - $entry.NonPagedFrees
-					NonPagedUsedBytes = [int]$entry.NonPagedUsed
-					TotalUsedBytes = $entry.PagedUsed + $entry.NonPagedUsed
+					PagedAllocs = [int64]$entry.PagedAllocs
+					PagedFrees = [int64]$entry.PagedFrees
+					PagedDiff = [int64]$entry.PagedAllocs - [int64]$entry.PagedFrees
+					PagedUsedBytes = [int64]$entry.PagedUsed
+					NonPagedAllocs = [int64]$entry.NonPagedAllocs
+					NonPagedFrees = [int64]$entry.NonPagedFrees
+					NonPagedDiff = [int64]$entry.NonPagedAllocs - [int64]$entry.NonPagedFrees
+					NonPagedUsedBytes = [int64]$entry.NonPagedUsed
+					TotalUsedBytes = [int64]$entry.PagedUsed + [int64]$entry.NonPagedUsed
 				}
 			}
 		}
