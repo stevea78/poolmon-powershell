@@ -100,13 +100,13 @@ Function Get-Pool() {
 	for ($i=0; $i -lt $count; $i++){
 		$entryPtr = New-Object System.Intptr -ArgumentList $offset
 		$entry = [system.runtime.interopservices.marshal]::PtrToStructure($entryPtr,[type]$systemPoolTag)
-		$Tag = [System.Text.Encoding]::Default.GetString($entry.Tag)
-		if (!$tags -or ($tags -and $tags -contains $Tag)) {
+		$tag = [System.Text.Encoding]::Default.GetString($entry.Tag)
+		if (!$tags -or ($tags -and $tags -contains $tag)) {
 			$tagResult = $null
 			$tagResult = [PSCustomObject]@{
 				DateTime = Get-Date -Format s $datetime
 				DateTimeUTC = Get-Date -Format s $datetime.ToUniversalTime()
-				Tag = $Tag
+				Tag = $tag
 				PagedAllocs = [int64]$entry.PagedAllocs
 				PagedFrees = [int64]$entry.PagedFrees
 				PagedDiff = [int64]$entry.PagedAllocs - [int64]$entry.PagedFrees
@@ -118,7 +118,7 @@ Function Get-Pool() {
 				TotalUsedBytes = [int64]$entry.PagedUsed + [int64]$entry.NonPagedUsed
 			}
 			if ($tagFileHash) {
-				if ($tagFileHash.containsKey($Tag)) {
+				if ($tagFileHash.containsKey($tag)) {
 					$Bin,$BinDesc = $tagFileHash.$tag.split('|')
 					$tagResult | Add-Member NoteProperty 'Binary' $Bin
 					$tagResult | Add-Member NoteProperty 'Description' $BinDesc
