@@ -2,8 +2,10 @@
 param (
 	# comma seperated list of tags to display e.g. -tags mmst,fmfn
 	[string[]]$tags,
-	# value to sort by e.g. -sortby pagedusedbytes
-	[string]$sortby = 'TotalUsed',
+	# comma seperated list of values to display e.g. -tags tag,pagedusedbytes
+	[string[]]$values,
+	# value to sort by e.g. -sortvalue pagedusedbytes
+	[string]$sortvalue = 'TotalUsed',
 	# direction to sort by e.g. -sortdir ascending|descending
 	[string]$sortdir = 'Descending',
 	# top X records to display e.g. -top 10
@@ -11,7 +13,9 @@ param (
 	# output view e.g. -view table|csv|grid
 	[string]$view = 'table',
 	# file containing tag information e.g. -tagfile pooltag.txt
-	[string]$tagfile = 'pooltag.txt'
+	[string]$tagfile = 'pooltag.txt',
+	# loop interval in seconds e.g. -loop 10
+	[int]$loop = 0
 )
  
 Add-Type -TypeDefinition @'
@@ -86,6 +90,7 @@ Function Get-Pool() {
 			return
 		}
 	}
+	$datetime = Get-Date
 	$systemPoolTag = New-Object Win32.SYSTEM_POOLTAG
 	$systemPoolTag = $systemPoolTag.GetType()
 	$size = [System.Runtime.InteropServices.Marshal]::SizeOf([type]([Win32.SYSTEM_POOLTAG]))
@@ -97,36 +102,32 @@ Function Get-Pool() {
 		$entry = [system.runtime.interopservices.marshal]::PtrToStructure($entryPtr,[type]$systemPoolTag)
 		$Tag = [System.Text.Encoding]::Default.GetString($entry.Tag)
 		if (!$tags -or ($tags -and $tags -contains $Tag)) {
-			if ($tagFileHash -and $tagFileHash.containsKey($tag)) {
-				$Bin,$BinDesc = $tagFileHash.$tag.split('|')
-					[PSCustomObject]@{
-					Tag = $Tag
-					PagedAllocs = [int64]$entry.PagedAllocs
-					PagedFrees = [int64]$entry.PagedFrees
-					PagedDiff = [int64]$entry.PagedAllocs - [int64]$entry.PagedFrees
-					PagedUsedBytes = [int64]$entry.PagedUsed
-					NonPagedAllocs = [int64]$entry.NonPagedAllocs
-					NonPagedFrees = [int64]$entry.NonPagedFrees
-					NonPagedDiff = [int64]$entry.NonPagedAllocs - [int64]$entry.NonPagedFrees
-					NonPagedUsedBytes = [int64]$entry.NonPagedUsed
-					TotalUsedBytes = [int64]$entry.PagedUsed + [int64]$entry.NonPagedUsed
-					Binary = $Bin
-					Description = $BinDesc
-				}
-			} else {
-				[PSCustomObject]@{
-					Tag = $Tag
-					PagedAllocs = [int64]$entry.PagedAllocs
-					PagedFrees = [int64]$entry.PagedFrees
-					PagedDiff = [int64]$entry.PagedAllocs - [int64]$entry.PagedFrees
-					PagedUsedBytes = [int64]$entry.PagedUsed
-					NonPagedAllocs = [int64]$entry.NonPagedAllocs
-					NonPagedFrees = [int64]$entry.NonPagedFrees
-					NonPagedDiff = [int64]$entry.NonPagedAllocs - [int64]$entry.NonPagedFrees
-					NonPagedUsedBytes = [int64]$entry.NonPagedUsed
-					TotalUsedBytes = [int64]$entry.PagedUsed + [int64]$entry.NonPagedUsed
+			$tagResult = $null
+			$tagResult = [PSCustomObject]@{
+				DateTime = Get-Date -Format s $datetime
+				DateTimeUTC = Get-Date -Format s $datetime.ToUniversalTime()
+				Tag = $Tag
+				PagedAllocs = [int64]$entry.PagedAllocs
+				PagedFrees = [int64]$entry.PagedFrees
+				PagedDiff = [int64]$entry.PagedAllocs - [int64]$entry.PagedFrees
+				PagedUsedBytes = [int64]$entry.PagedUsed
+				NonPagedAllocs = [int64]$entry.NonPagedAllocs
+				NonPagedFrees = [int64]$entry.NonPagedFrees
+				NonPagedDiff = [int64]$entry.NonPagedAllocs - [int64]$entry.NonPagedFrees
+				NonPagedUsedBytes = [int64]$entry.NonPagedUsed
+				TotalUsedBytes = [int64]$entry.PagedUsed + [int64]$entry.NonPagedUsed
+			}
+			if ($tagFileHash) {
+				if ($tagFileHash.containsKey($Tag)) {
+					$Bin,$BinDesc = $tagFileHash.$tag.split('|')
+					$tagResult | Add-Member NoteProperty 'Binary' $Bin
+					$tagResult | Add-Member NoteProperty 'Description' $BinDesc
+				} else {
+					$tagResult | Add-Member NoteProperty 'Binary' ''
+					$tagResult | Add-Member NoteProperty 'Description' ''
 				}
 			}
+			$tagResult
 		}
 		$offset = $offset + $size
 	}
@@ -134,14 +135,17 @@ Function Get-Pool() {
 }
 
 $expression = 'Get-Pool'
-if ($sortby) {
-	$expression += '|Sort-Object -Property $sortby'
+if ($sortvalue) {
+	$expression += '|Sort-Object -Property $sortvalue'
 	if ($sortdir -eq 'Descending') {
 		$expression += ' -Descending'
 	}
 }
 if ($top -gt 0) {
 	$expression += '|Select-Object -First $top'
+}
+if ($values) {
+	$expression += '|Select-Object $values'
 }
 if ($view -eq 'csv') {
 	$expression += '|ConvertTo-Csv -NoTypeInformation'
@@ -150,4 +154,11 @@ if ($view -eq 'csv') {
 } else {
 	$expression += '|Format-Table *'
 }
-Invoke-Expression $expression
+if ($loop -gt 0) {
+	while ($true) {
+		Invoke-Expression $expression
+		Start-Sleep -Seconds $loop
+	}
+} else {
+	Invoke-Expression $expression
+}
