@@ -1,23 +1,48 @@
-<# .SYNOPSIS #>
+<#
+
+.SYNOPSIS
+	.
+
+.DESCRIPTION
+	View kernel memory pool tag information
+
+.PARAMETER tags
+	comma separated list of tags to display
+
+.PARAMETER values
+	comma separated list of values to display
+
+.PARAMETER sortvalue
+	value to sort by
+
+.PARAMETER sortdir
+	direction to sort (ascending|descending)
+
+.PARAMETER top
+	top X records to display
+
+.PARAMETER view
+	output view (table|csv|grid)
+
+.PARAMETER tagfile
+	file containing tag information
+
+.PARAMETER loop
+	loop interval in seconds
+
+#>
+
 param (
-	# comma seperated list of tags to display e.g. -tags mmst,fmfn
 	[string[]]$tags,
-	# comma seperated list of values to display e.g. -tags tag,pagedusedbytes
 	[string[]]$values,
-	# value to sort by e.g. -sortvalue pagedusedbytes
 	[string]$sortvalue = 'TotalUsed',
-	# direction to sort by e.g. -sortdir ascending|descending
 	[string]$sortdir = 'Descending',
-	# top X records to display e.g. -top 10
 	[int]$top = 0,
-	# output view e.g. -view table|csv|grid
 	[string]$view = 'table',
-	# file containing tag information e.g. -tagfile pooltag.txt
 	[string]$tagfile = 'pooltag.txt',
-	# loop interval in seconds e.g. -loop 10
 	[int]$loop = 0
 )
- 
+
 Add-Type -TypeDefinition @'
 using System;
 using System.Runtime.InteropServices;
