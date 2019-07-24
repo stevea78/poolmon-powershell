@@ -30,6 +30,13 @@
 .PARAMETER loop
 	loop interval in seconds
 
+.EXAMPLE
+	.\poolmon-powershell.ps1 -tags FMfn -values DateTime,Tag,PagedUsedBytes,Binary,Description -tagfile pooltag.txt -loop 5 -view csv
+	"DateTime","Tag","PagedUsedBytes","Binary","Description"
+	"2019-07-24T12:21:57","FMfn","199922400","fltmgr.sys","NAME_CACHE_NODE structure"
+	"2019-07-24T12:22:02","FMfn","199941136","fltmgr.sys","NAME_CACHE_NODE structure"
+	"2019-07-24T12:22:07","FMfn","199878016","fltmgr.sys","NAME_CACHE_NODE structure"
+
 #>
 
 param (
@@ -176,12 +183,21 @@ if ($view -eq 'csv') {
 	$expression += '|ConvertTo-Csv -NoTypeInformation'
 } elseif ($view -eq 'grid') {
 	$expression += '|Out-GridView -Title "Kernel Memory Pool (captured $(Get-Date -Format "dd/MM/yyyy HH:mm:ss"))" -Wait'
-} else {
+} elseif ($view -eq 'table') {
 	$expression += '|Format-Table *'
 }
-if ($loop -gt 0) {
+if ($loop -gt 0 -and $view -ne 'grid') {
+	$loopcount = 0
 	while ($true) {
-		Invoke-Expression $expression
+		$loopcount++
+		if ($loopcount -eq 1) {
+			Invoke-Expression $expression
+			if ($view -eq 'csv') {
+				$expression += '|Select-Object -skip 1'
+			}
+		} else {
+			Invoke-Expression $expression
+		}
 		Start-Sleep -Seconds $loop
 	}
 } else {
