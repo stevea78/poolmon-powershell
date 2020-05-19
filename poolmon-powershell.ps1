@@ -186,7 +186,6 @@ if ($view -eq 'csv') {
 } elseif ($view -eq 'table') {
 	$expression += '|Format-Table *'
 }
-$expression
 if ($loop -gt 0 -and $view -ne 'grid') {
 	$loopcount = 0
 	while ($true) {
