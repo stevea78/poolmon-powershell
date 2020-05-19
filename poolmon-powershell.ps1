@@ -40,8 +40,8 @@
 #>
 
 param (
-	[string[]]$tags,
-	[string[]]$values,
+	[string]$tags,
+	[string]$values,
 	[string]$sortvalue = 'TotalUsed',
 	[string]$sortdir = 'Descending',
 	[int]$top = 0,
@@ -122,6 +122,7 @@ Function Get-Pool() {
 			return
 		}
 	}
+	$tags = $tags -Split ','
 	$datetime = Get-Date
 	$systemPoolTag = New-Object Win32.SYSTEM_POOLTAG
 	$systemPoolTag = $systemPoolTag.GetType()
@@ -165,19 +166,18 @@ Function Get-Pool() {
 	}
 	[System.Runtime.InteropServices.Marshal]::FreeHGlobal($ptr)
 }
-
 $expression = 'Get-Pool'
 if ($sortvalue) {
-	$expression += '|Sort-Object -Property $sortvalue'
+	$expression += "|Sort-Object -Property $sortvalue"
 	if ($sortdir -eq 'Descending') {
 		$expression += ' -Descending'
 	}
 }
 if ($top -gt 0) {
-	$expression += '|Select-Object -First $top'
+	$expression += "|Select-Object -First $top"
 }
 if ($values) {
-	$expression += '|Select-Object $values'
+	$expression += "|Select-Object $values"
 }
 if ($view -eq 'csv') {
 	$expression += '|ConvertTo-Csv -NoTypeInformation'
@@ -186,6 +186,7 @@ if ($view -eq 'csv') {
 } elseif ($view -eq 'table') {
 	$expression += '|Format-Table *'
 }
+$expression
 if ($loop -gt 0 -and $view -ne 'grid') {
 	$loopcount = 0
 	while ($true) {
